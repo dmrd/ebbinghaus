@@ -1,5 +1,5 @@
 (defproject ebbinghaus "0.1.0-SNAPSHOT"
-  :description "FIXME: write description"
+  :description "Spaced repetition on a concept graph"
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
@@ -16,7 +16,12 @@
                  [com.stuartsierra/component "0.3.2"]
                  [org.danielsz/system "0.4.0"]
                  [org.clojure/tools.namespace "0.2.11"]
-                 [reagent "0.6.0"]]
+                 [reagent "0.6.0"]
+                 [reagent "0.6.0"]
+                 [posh "0.5.5"]
+                 [cljsjs/d3 "4.3.0-5"]
+                 [re-com "2.1.0"]
+                 ]
 
   :plugins [[lein-cljsbuild "1.1.6"]
             [lein-environ "1.1.0"]]
