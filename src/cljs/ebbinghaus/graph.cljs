@@ -27,14 +27,43 @@
 (defn container-did-mount [conn]
   (container-enter conn))
 
+(defn avg_x [l]
+  (let [
+        source (.. l
+                   -source
+                   -x)
+        target (.. l
+                   -target
+                   -x)
+        ]
+    (/ (+ source target) 2)
+    )
+  )
+
+(defn avg_y [l]
+  (let [
+        source (.. l
+                   -source
+                   -y)
+        target (.. l
+                   -target
+                   -y)
+        ]
+    (/ (+ source target) 2)
+    )
+  )
+
 ;; Actual d3 logic
-(defn on-tick [height width link node]
+(defn on-tick [height width link link_text node]
   (fn []
     (.. link
         (attr "x1" #(.. % -source -x))
         (attr "y1" #(.. % -source -y))
         (attr "x2" #(.. % -target -x))
         (attr "y2" #(.. % -target -y)))
+    (.. link_text
+        (attr "x" avg_x)
+        (attr "y" avg_y))
     (.. node
         (attr "transform" #(str "translate(" (.. % -x) "," (.. % -y) ")")))
     ))
@@ -86,11 +115,22 @@
                      (selectAll ".link")
                      (data links_d3)
                      (enter)
-                     (append "line")
-                     (attr "class" "link")
-                     (attr "stroke-width" "1.5px")
-                     (attr "stroke" "#999")
+                     (append "g")
                      )
+
+        svg_lines (.. svg_link
+                      (append "line")
+                      (attr "class" "link")
+                      (attr "stroke-width" "1.5px")
+                      (attr "stroke" "#999")
+                      )
+
+        svg_line_text (.. svg_link
+                      (append "text")
+                      (attr "cx" 12)
+                      (attr "cy" ".35em")
+                      (text #(.-relation %))
+                      )
 
         ; Setup simulation
         simulation (.. (js/d3.forceSimulation)
@@ -100,7 +140,7 @@
                        (force "link" (.. (js/d3.forceLink)
                                          (id (fn [d] d.id))
                                          (distance 50)))
-                       (on "tick" (on-tick HEIGHT WIDTH svg_link svg_node_group)))
+                       (on "tick" (on-tick HEIGHT WIDTH svg_lines svg_line_text svg_node_group)))
         ]
 
     ; Add the nodes and label SVG objects
