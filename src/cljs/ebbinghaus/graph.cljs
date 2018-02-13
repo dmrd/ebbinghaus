@@ -27,31 +27,10 @@
 (defn container-did-mount [conn]
   (container-enter conn))
 
-(defn avg_x [l]
-  (let [
-        source (.. l
-                   -source
-                   -x)
-        target (.. l
-                   -target
-                   -x)
-        ]
-    (/ (+ source target) 2)
-    )
-  )
-
-(defn avg_y [l]
-  (let [
-        source (.. l
-                   -source
-                   -y)
-        target (.. l
-                   -target
-                   -y)
-        ]
-    (/ (+ source target) 2)
-    )
-  )
+(defn- avg [l selector]
+  (let [src (aget l "source" selector)
+        tgt (aget l "target" selector)]
+    (/ (+ src tgt) 2)))
 
 ;; Actual d3 logic
 (defn on-tick [height width link link_text node]
@@ -62,8 +41,8 @@
         (attr "x2" #(.. % -target -x))
         (attr "y2" #(.. % -target -y)))
     (.. link_text
-        (attr "x" avg_x)
-        (attr "y" avg_y))
+        (attr "x" #(avg % "x"))
+        (attr "y" #(avg % "y")))
     (.. node
         (attr "transform" #(str "translate(" (.. % -x) "," (.. % -y) ")")))
     ))
