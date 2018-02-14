@@ -9,8 +9,8 @@
 
 (enable-console-print!)
 
-(def schema {:name         {:db/unique :db.unique/identity}
-             :relation     {:db/unique :db.unique/identity}
+(def schema {:name         {:db/cardinality :db.cardinality/one}
+             :relation     {:db/cardinality :db.cardinality/one}
              :source       {:db/valueType :db.type/ref}
              :target       {:db/valueType :db.type/ref}
              })
@@ -26,7 +26,7 @@
              {:db/id -4 :name "posh" :definition ["A declarative query language"]}
              {:db/id -5 :relation "wrapper for" :source -4 :target -1}
              {:db/id -6 :relation "function of" :source -2 :target -1}
-             {:db/id -7 :relation "function of2" :source -3 :target -1}
+             {:db/id -7 :relation "function of" :source -3 :target -1}
              ])
 
 ;;; Add the datoms via transaction
