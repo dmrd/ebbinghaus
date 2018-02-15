@@ -121,13 +121,13 @@
                                          (id (fn [d] d.id))
                                          (distance 50)))
                        (on "tick" (on-tick HEIGHT WIDTH svg_lines svg_line_text svg_node_group)))
+        svg_node_rects (.. svg_node_group
+                           (append "rect"))
         ]
 
     (defn- tick []
       (on-tick HEIGHT WIDTH svg_lines svg_line_text svg_node_group)
       )
-
-    ;; (println simulation.fix)
 
     (defn- dragstarted [d]
       (simulation.restart)
@@ -146,10 +146,17 @@
       )
 
     ; Add the nodes and label SVG objects
-    (.. svg_node_group
-                     (append "circle")
+    (.. svg_node_rects
                      (attr "class" "node")
-                     (attr "r" 6)
+                     (attr "y" -20)
+                     (attr "height" 40)
+                     (attr "rx" 20)
+                     (attr "ry" 20)
+                     (attr "ry" 20)
+                     (attr "stroke-width" "1.5px")
+                     (attr "fill" "white")
+                     (attr "stroke" "black")
+                     (attr "cursor" "move")
                      (call (.. (d3.drag)
                                (on "start" dragstarted)
                                (on "drag" dragged)
@@ -160,10 +167,32 @@
                                            (aset d "fy" nil)
                                            ))))
 
+    ; Add node text
     (.. svg_node_group
         (append "text")
-        (text (fn [d] d.name ))
-        (attr "transform" "translate(5,-4)"))
+        (text (fn [d] d.name))
+        (attr "text-anchor" "middle")
+        (attr "alignment-baseline" "middle")
+        (each (fn [d]
+                (this-as this
+                 (let [circleWidth 40
+                       textLength (.getComputedTextLength this)
+                       textWidth (+ textLength 20)
+                       ]
+                   (aset d "isCircle" true)
+                   (aset d "rectX" (/ (- (+ textLength 20)) 2))
+                   (aset d "rectWidth" textWidth)
+                   (aset d "textLength" textLength)
+                   (println d)
+                 )))
+               )
+        )
+
+    ; Change the width of each rectangle to match text width
+    (.. svg_node_rects
+        (attr "x" (fn [d] d.rectX))
+        (attr "width" (fn [d] d.rectWidth))
+        )
 
     ; Register the nodes and edges with the simulation
     (simulation.nodes nodes_d3)
