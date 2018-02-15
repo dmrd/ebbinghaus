@@ -114,19 +114,51 @@
         ; Setup simulation
         simulation (.. (js/d3.forceSimulation)
                        (force "charge" (.strength (js/d3.forceManyBody) -200))
-                       (force "x" (js/d3.forceX (/ WIDTH 2)))
-                       (force "y" (js/d3.forceY (/ HEIGHT 2)))
+                       (force "center" (d3.forceCenter (/ WIDTH 2) (/ HEIGHT 2)))
+                       ;; (force "x" (js/d3.forceX (/ WIDTH 2)))
+                       ;; (force "y" (js/d3.forceY (/ HEIGHT 2)))
                        (force "link" (.. (js/d3.forceLink)
                                          (id (fn [d] d.id))
                                          (distance 50)))
                        (on "tick" (on-tick HEIGHT WIDTH svg_lines svg_line_text svg_node_group)))
         ]
 
+    (defn- tick []
+      (on-tick HEIGHT WIDTH svg_lines svg_line_text svg_node_group)
+      )
+
+    ;; (println simulation.fix)
+
+    (defn- dragstarted [d]
+      (simulation.restart)
+      (simulation.alphaTarget 1.0)
+      (aset d "fx" d.x)
+      (aset d "fy" d.y)
+      )
+
+    (defn- dragged [d]
+      (aset d "fx" d3.event.x)
+      (aset d "fy" d3.event.y)
+      )
+
+    (defn- dragended [d]
+      ; Placeholder
+      )
+
     ; Add the nodes and label SVG objects
-    (let [circle (.. svg_node_group
+    (.. svg_node_group
                      (append "circle")
                      (attr "class" "node")
-                     (attr "r" 6))])
+                     (attr "r" 6)
+                     (call (.. (d3.drag)
+                               (on "start" dragstarted)
+                               (on "drag" dragged)
+                               (on "end" dragended)
+                               ))
+                     (on "click" (fn [d] (do
+                                           (aset d "fx" nil)
+                                           (aset d "fy" nil)
+                                           ))))
 
     (.. svg_node_group
         (append "text")
