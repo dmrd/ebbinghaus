@@ -70,26 +70,20 @@
                 :prepare-dataset prepare-graph
                 :did-mount (fn [node ratom]
                              (let [
-                                   ;; root (.. node
-                                   ;;          ;; (attr "transform" "translate(250,250)")
-                                   ;;          )
+                                   ; Filter down to nodes
                                    nodes (.. node
-                                        ; (filter (fn [d] (not (nil? d.id))))
                                              (filter (fn [d] (do (println d) d.name)))
-                                             (filter (fn [d] (do (println d.name) true)))
-                                             ;; (append "g")
                                              (attr "transform" (fn [d] (str "translate(" (+ 250 d.x) "," (+ 250 d.y) ")")))
-
                                              )
+                                   ; Filter down to edges
                                    edges (.. node
                                              (filter (fn [d] d.source))
-                                             (filter (fn [d] (do (println (str "LINE " d.source.id)) true)))
+                                             (attr "transform" (fn [d] (str "translate(250,250)")))
                                              )
                                    ]
 
                                (.. nodes
                                    (append "circle")
-                                   (each (fn [d] (println (str "CIRCLE " d.name))))
                                    (attr "r" 10)
                                    )
 
@@ -106,10 +100,10 @@
                                    (append "line")
                                    (attr "stroke-width" "2px")
                                    (attr "stroke" "#fff")
-                                   (attr "x1" (fn [d] (+ 250 d.source.x)))
-                                   (attr "y1" (fn [d] (+ 250 d.source.y)))
-                                   (attr "x2" (fn [d] (+ 250 d.target.x)))
-                                   (attr "y2" (fn [d] (+ 250 d.target.y)))
+                                   (attr "x1" (fn [d] d.source.x))
+                                   (attr "y1" (fn [d] d.source.y))
+                                   (attr "x2" (fn [d] d.target.x))
+                                   (attr "y2" (fn [d] d.target.y))
                                    )
 
                                (.. edges
@@ -117,8 +111,8 @@
                                    (text (fn [d] d.relation))
                                    (style "font" "10px sans-serif")
                                    (style "text-anchor" "left")
-                                   (attr "x" (fn [d] (+ 250 (avg d "x"))))
-                                   (attr "y" (fn [d] (+ 250 (avg d "y"))))
+                                   (attr "x" (fn [d] (avg d "x")))
+                                   (attr "y" (fn [d] (avg d "y")))
                                    )
                                )
 
