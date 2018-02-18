@@ -3,7 +3,9 @@
    [reagent.core :as r]
    [re-com.core :as rc]
    [posh.reagent :as p]
-   [cljsjs.d3 :as d3]))
+   [cljsjs.d3 :as d3]
+   [rid3.core :as rid3]
+   ))
 
 (def WIDTH 500)
 (def HEIGHT 500)
@@ -15,17 +17,6 @@
 (defn get-container []
   (js/d3.select "#graph svg .container .graph")
   )
-
-(defn container-enter [conn]
-  (-> (js/d3.select "#graph svg")
-      (.append "g")
-      (.attr "class" "container")
-      (.attr "width" WIDTH)
-      (.attr "height" HEIGHT)
-      ))
-
-(defn container-did-mount [conn]
-  (container-enter conn))
 
 (defn- avg [l selector]
   (let [src (aget l "source" selector)
@@ -194,7 +185,7 @@
         (attr "width" (fn [d] d.rectWidth))
         )
 
-    ; Register the nodes and edges with the simulation
+                                        ; Register the nodes and edges with the simulation
     (simulation.nodes nodes_d3)
     (.. simulation
         (force "link")
@@ -202,49 +193,78 @@
         )
     ))
 
-;; Reagent wrappers
+(defn render-graph [conn]
+  (let [simulation (.. (js/d3.forceSimulation)
+                       (force "charge" (.strength (js/d3.forceManyBody) -200))
+                       (force "center" (d3.forceCenter (/ WIDTH 2) (/ HEIGHT 2)))
+                       ;; (force "x" (js/d3.forceX (/ WIDTH 2)))
+                       ;; (force "y" (js/d3.forceY (/ HEIGHT 2)))
+                       (force "link" (.. (js/d3.forceLink)
+                                         (id (fn [d] d.id))
+                                         (distance 50))))
 
+        prepare-nodes (fn [conn]
+                        (let [ids @(p/q '[:find ?e :where [?e :name]] conn)
+                              nodes (for [id (map first ids)]
+                                      @(p/pull conn '[:name] id))
+                              ]
+                          (clj->js nodes)
+                          ))
+        prepare-edges (fn [conn]
+                        (let [relation_ids @(p/q '[:find ?e :where [?e :relation]] conn)
+                             relations (for [id (map first relation_ids)]
+                                         @(p/pull conn '[:relation :source :target] id))]
+                          (clj->js relations)
+                          ))
+        get_x (fn [d]
+                (* 100 d.id)
+                )
+                        ]
+    [rid3/viz
+     {:id    "graph"
+      :ratom conn
+      :svg   {:did-mount (fn [node conn]
+                           (-> node
+                               (.attr "width" 1000)
+                               (.attr "height" 1000)
+                               (.style "background-color" "grey")))}
+      :pieces [
+       {:kind :elem-with-data
+        :tag "circle"
+        :class "nodes"
+        :prepare-dataset prepare-nodes
+        :did-mount (fn [node ratom]
+                     (let [scale js/d3.scale]
+                       (println scale)
+                       (.. node
+                           (attr "cx" get_x)
+                           (attr "cy" 100)
+                           (attr "r" 30)
+                           )
+                       ))}
 
-(defn graph-update [conn])
-(defn graph-exit [conn]
-  [])
+               {:kind :elem-with-data
+                :tag "text"
+                :class "labels"
+                :prepare-dataset prepare-nodes
+                :did-mount (fn [node ratom]
+                             (.. node
+                                 (style "font" "10px sans-serif")
+                                 (style "text-anchor" "middle")
+                                 (attr "transform" (fn [d] (str "translate(" (get_x d) ", 50)")))
+                                 (each (fn [d] (println d)))
+                                 (text (fn [d] d.name))
+                                 ))}
 
-(defn graph-did-update [conn]
-  (graph-enter conn)
-  (graph-update conn)
-  (graph-exit conn))
+               {:kind :elem-with-data
+                :tag "line"
+                :class "edges"
+                :prepare-dataset prepare-edges
+                :did-mount (fn [node ratom]
+                             (.. node
+                                 (each (fn [d] (println d)))
+                                 (attr "stroke-width" "1.5px")
+                                 ))}
 
+               ]}]))
 
-(defn graph-did-mount [conn]
-  (.. (js/d3.select "#graph svg .container")
-      (append "g")
-      (attr "class" "graph")
-      (attr "transform" "translate(0,20)")
-      )
-  (graph-did-update conn))
-
-
-
-;; Main
-
-(defn viz-render [conn]
-  (let [width  WIDTH
-        height HEIGHT]
-    [:div
-     {:id "graph"}
-     [:svg
-      {:width  width
-       :height height}]]))
-
-(defn viz-did-mount [conn]
-  (container-did-mount conn)
-  (graph-did-mount conn))
-
-(defn viz-did-update [conn]
-  (graph-did-update conn))
-
-(defn- render-graph [conn]
-  (r/create-class
-   {:reagent-render      #(viz-render conn)
-    :component-did-mount #(viz-did-mount conn)
-    :component-did-update #(viz-did-update conn)}))
