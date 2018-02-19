@@ -49,27 +49,69 @@
 ; datalog queries are guaranteed to terminate
 
 (defn new-entry-submit [ratom]
-  (let [text (r/atom "")]
-    (fn []
+  (let [
+        conn (:conn @ratom)
+        entity_ids @(p/q '[:find ?e :where [?e :name]] conn)
+        entities (for [id entity_ids]
+                   @(p/pull conn '[:name] (first id)))
+        relation_ids @(p/q '[:find ?e :where [?e :relation]] conn)
+        relations (for [id relation_ids]
+                   @(p/pull conn '[:relation] (first id)))
+        new-entity (r/atom "New entity")
+        entity (r/atom nil)
+        relation (r/atom "relation")
+        object (r/atom nil)
+        ]
+     (println relations)
       [:div
-       [:div [:span "Enter new item:"]]
-       [:div [:span (:ts @ratom)]]
-       [:div [rc/input-text
-              :model @text
-              :on-change #(reset! text %)]
-        [:input {:type "button"
-                 :value "Submit"
-                 :on-click #(do
-                              (p/transact! (:conn @ratom) [{:db/id -1 :name @text}])
-                              (swap! ratom (fn [s] (assoc s :ts (inc (:ts s)))))
-                              ;; (swap! ratom ()inc)
-                              (reset! text ""))
-                 }]]])))
+       [rc/h-box
+        :children [
+                   [:span "Enter new item:"]
+                   [rc/input-text
+                    :model new-entity
+                    :change-on-blur? false
+                    :on-change #(reset! new-entity %)]
+                   [:input {:type "button"
+                            :value "Submit"
+                            :on-click #(do
+                                         (p/transact! (:conn @ratom) [{:db/id -1 :name @new-entity}])
+                                         (reset! new-entity ""))}]
+                   ]]
+                    [rc/h-box
+                     :children [
+                                [:span "Enter new relation:"]
+                    [rc/single-dropdown
+                     :choices entities ;[{:name "test" :id 1}]
+                     :id-fn #(:db/id %)
+                     :label-fn #(:name %)
+                     :model entity
+                     :on-change #(do
+                                   (reset! entity %)
+                                   (println %)
+                                   (println @entity)
+                                   )
+                     ]
+                                [rc/input-text
+                                 :model relation
+                                 :change-on-blur? false
+                                 :width "100px"
+                                 :on-change #(reset! relation %)]
+                                [rc/single-dropdown
+                                 :choices entities
+                                 :id-fn #(:db/id %)
+                                 :label-fn #(:name %)
+                                 :model object
+                                 :on-change #(reset! object %)
+                                 ]
+                                [:input {:type "button"
+                                         :value "Submit relation"
+                                         :on-click #(p/transact! (:conn @ratom) [{:db/id -1
+                                                                                    :relation @relation
+                                                                                    :source @entity
+                                                                                    :target @object}])
+                                         }]
+                                ]]]))
 
-(def get-names '[:find ?n
-                 :where
-                 [?e :name ?n]
-                 ])
 
 (defn show-entity [conn id]
   (let [e @(p/pull conn '[:name] id)]
@@ -80,7 +122,8 @@
 
 (defn show-entries [ratom]
   (let [conn (:conn @ratom)
-        ids @(p/q '[:find ?e :where [?e :name]] conn)]
+        ids @(p/q '[:find ?e :where [?e :name]] conn)
+        ]
     [rc/v-box
      :children (for [id (map first ids)] (show-entity conn id))]))
 
