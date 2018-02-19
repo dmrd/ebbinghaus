@@ -13,6 +13,8 @@
   (let [src (get-in l ["source" selector])
         tgt (get-in l ["target" selector])]
     (/ (+ src tgt) 2)))
+(defn- rand_color []
+  (rand-nth ["green" "black" "grey" "red" "blue" "purple" "yellow"]))
 
 (defn svg_render [node _]
   (-> node
@@ -27,7 +29,7 @@
                 :cx (get node "x")
                 :cy (get node "y")
                 :fill @color
-                ;; :on-click (fn [] (swap! color ))
+                :on-click (fn [] (swap! color rand_color))
                 :on-mouse-over (fn [] (println "on"))
                 :on-mouse-out (fn [] (println "off"))
                 }
