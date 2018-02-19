@@ -20,6 +20,54 @@
       (.attr "height" HEIGHT)
       (.style "background-color" "grey")))
 
+(defn node_svg [node]
+  (let [color (r/atom "red")]
+    (fn []
+      [:circle {:r 10
+                :cx (get node "x")
+                :cy (get node "y")
+                :fill @color
+                ;; :on-click (fn [] (swap! color ))
+                :on-mouse-over (fn [] (println "on"))
+                :on-mouse-out (fn [] (println "off"))
+                }
+       ])
+    ))
+
+(defn node_text [node]
+  [:text
+   {
+    :x (+ 10 (get node "x"))
+    :y (+ 10 (get node "y"))
+    :style {
+            :text-anchor "left"
+            }
+    }
+   (get node "name")
+   ])
+
+(defn edge_line [edge]
+  [:line {
+          :x1 (get-in edge ["source" "x"])
+          :y1 (get-in edge ["source" "y"])
+          :x2 (get-in edge ["target" "x"])
+          :y2 (get-in edge ["target" "y"])
+          :stroke-width "2px"
+          :stroke "#000"
+          }])
+
+(defn edge_text [edge]
+  [:text
+   {
+    :x (avg edge "x")
+    :y (avg edge "y")
+    :style {
+            :text-anchor "left"
+            }
+    }
+   (get edge "relation")
+   ]
+  )
 
 (defn render-graph [ratom]
   (let [state (r/atom {
@@ -65,44 +113,14 @@
      [:g {:transform "translate(250,250)"}
       (for [node nodes_clj]
         [:g {:key (get node "index")}
-         [:circle {:r 10
-                   :cx (get node "x")
-                   :cy (get node "y")
-                   }]
-         [:text
-          {
-           :x (+ 10 (get node "x"))
-           :y (+ 10 (get node "y"))
-           :style {
-                   :text-anchor "left"
-                   }
-           }
-          (get node "name")
-          ]
-
+         [node_svg node]
+         [node_text node]
          ])
       (for [idx (range (count edges_clj))]
         (let [edge (get edges_clj idx)]
-          (println (get-in edge ["source" "x"]))
           [:g {:key idx}
-           [:line {
-                   :x1 (get-in edge ["source" "x"])
-                   :y1 (get-in edge ["source" "y"])
-                   :x2 (get-in edge ["target" "x"])
-                   :y2 (get-in edge ["target" "y"])
-                   :stroke-width "2px"
-                   :stroke "#000"
-                   }]
-           [:text
-            {
-             :x (avg edge "x")
-             :y (avg edge "y")
-             :style {
-                     :text-anchor "left"
-                     }
-             }
-            (get edge "relation")
-            ]
+           [edge_line edge]
+           [edge_text edge]
            ]))
       ]
      ]))
