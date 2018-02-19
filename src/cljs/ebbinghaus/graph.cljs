@@ -10,114 +10,99 @@
 (def HEIGHT 500)
 
 (defn- avg [l selector]
-  (let [src (aget l "source" selector)
-        tgt (aget l "target" selector)]
+  (let [src (get-in l ["source" selector])
+        tgt (get-in l ["target" selector])]
     (/ (+ src tgt) 2)))
 
-(defn render-graph [conn]
-  (let [
-        force (.. js/cola
-                  (d3adaptor js/d3)
-                  (linkDistance 120)
-                  )
+(defn svg_render [node _]
+  (-> node
+      (.attr "width" WIDTH)
+      (.attr "height" HEIGHT)
+      (.style "background-color" "grey")))
 
-        prepare-graph (fn [conn]
-                        (let [node_ids @(p/q '[:find ?e :where [?e :name]] conn)
-                              nodes (for [id (map first node_ids)]
-                                      @(p/pull conn '[:name] id))
-                              relation_ids @(p/q '[:find ?e :where [?e :relation]] conn)
-                              relations (for [id (map first relation_ids)]
-                                          @(p/pull conn '[:relation :source :target] id))
+
+(defn render-graph [ratom]
+  (let [state (r/atom {
+                       :edges []
+                       :nodes []
+                       })
+        conn (:conn @ratom)
+        node_ids @(p/q '[:find ?e :where [?e :name]] conn)
+        nodes (for [id (map first node_ids)]
+                @(p/pull conn '[:name] id))
+        relation_ids @(p/q '[:find ?e :where [?e :relation]] conn)
+        relations (for [id (map first relation_ids)]
+                    @(p/pull conn '[:relation :source :target] id))
 
                                         ; Get node id -> idx in the node array
                                         ; and change `links` to be relative to it.
-                              id_map (into {}
-                                           (for [idx (range (count nodes))]
-                                             [(:db/id (nth nodes idx)) idx]))
-                              relations (for [relation relations]
-                                          {
-                                           :relation (get relation :relation)
-                                           :source (get id_map (get-in relation [:source :db/id]))
-                                           :target (get id_map (get-in relation [:target :db/id]))
-                                           }
-                                          )
-                              nodes_js (clj->js nodes)
-                              edges_js (clj->js relations)
-                              ]
-                          (.. force
-                              (nodes nodes_js)
-                              (links edges_js)
-                              (start 100)
-                              )
-                          (clj->js
-                           (concat
-                            (js->clj nodes_js)
-                            (js->clj edges_js)))
-                          ))
+        id_map (into {}
+                     (for [idx (range (count nodes))]
+                       [(:db/id (nth nodes idx)) idx]))
+        relations (for [relation relations]
+                    {
+                     :relation (get relation :relation)
+                     :source (get id_map (get-in relation [:source :db/id]))
+                     :target (get id_map (get-in relation [:target :db/id]))
+                     }
+                    )
+
+        ; TODO(ddohan): Figure out a way to avoid the switching between mutable and immutable
+        nodes_js (clj->js nodes)
+        edges_js (clj->js relations)
+        force (.. js/cola
+                  (d3adaptor js/d3)
+                  (linkDistance 120)
+                  (nodes nodes_js)
+                  (links edges_js)
+                  (start 100)
+                  )
+        nodes_clj (js->clj nodes_js)
+        edges_clj (js->clj edges_js)
+        prepare-graph (fn [ratom] (concat (js->clj edges_js) (js->clj nodes_js)))
         ]
-    [rid3/viz
-     {:id    "graph"
-      :ratom conn
-      :svg   {:did-mount (fn [node conn]
-                           (-> node
-                               (.attr "width" WIDTH)
-                               (.attr "height" HEIGHT)
-                               (.style "background-color" "grey")))}
-      :pieces [
-               {:kind :elem-with-data
-                :tag "g"
-                :class "ids"
-                :prepare-dataset prepare-graph
-                :did-mount (fn [node ratom]
-                             (let [
-                                   ; Filter down to nodes
-                                   nodes (.. node
-                                             (filter (fn [d] (do (println d) d.name)))
-                                             (attr "transform" (fn [d] (str "translate(" (+ 250 d.x) "," (+ 250 d.y) ")")))
-                                             )
-                                   ; Filter down to edges
-                                   edges (.. node
-                                             (filter (fn [d] d.source))
-                                             (attr "transform" (fn [d] (str "translate(250,250)")))
-                                             )
-                                   ]
+    [:svg {:width WIDTH :height HEIGHT}
+     [:g {:transform "translate(250,250)"}
+      (for [node nodes_clj]
+        [:g {:key (get node "index")}
+         [:circle {:r 10
+                   :cx (get node "x")
+                   :cy (get node "y")
+                   }]
+         [:text
+          {
+           :x (+ 10 (get node "x"))
+           :y (+ 10 (get node "y"))
+           :style {
+                   :text-anchor "left"
+                   }
+           }
+          (get node "name")
+          ]
 
-                               (.. nodes
-                                   (append "circle")
-                                   (attr "r" 10)
-                                   )
-
-                               (.. nodes
-                                   (append "text")
-                                   (attr "transform" "translate(10,10)")
-                                   (style "font" "10px sans-serif")
-                                   (style "text-anchor" "left")
-                                   (each (fn [d] (println d)))
-                                   (text (fn [d] d.name))
-                                   )
-
-                               (.. edges
-                                   (append "line")
-                                   (attr "stroke-width" "2px")
-                                   (attr "stroke" "#fff")
-                                   (attr "x1" (fn [d] d.source.x))
-                                   (attr "y1" (fn [d] d.source.y))
-                                   (attr "x2" (fn [d] d.target.x))
-                                   (attr "y2" (fn [d] d.target.y))
-                                   )
-
-                               (.. edges
-                                   (append "text")
-                                   (text (fn [d] d.relation))
-                                   (style "font" "10px sans-serif")
-                                   (style "text-anchor" "left")
-                                   (attr "x" (fn [d] (avg d "x")))
-                                   (attr "y" (fn [d] (avg d "y")))
-                                   )
-                               )
-
-                             )}
-
-
-               ]}]))
-
+         ])
+      (for [idx (range (count edges_clj))]
+        (let [edge (get edges_clj idx)]
+          (println (get-in edge ["source" "x"]))
+          [:g {:key idx}
+           [:line {
+                   :x1 (get-in edge ["source" "x"])
+                   :y1 (get-in edge ["source" "y"])
+                   :x2 (get-in edge ["target" "x"])
+                   :y2 (get-in edge ["target" "y"])
+                   :stroke-width "2px"
+                   :stroke "#000"
+                   }]
+           [:text
+            {
+             :x (avg edge "x")
+             :y (avg edge "y")
+             :style {
+                     :text-anchor "left"
+                     }
+             }
+            (get edge "relation")
+            ]
+           ]))
+      ]
+     ]))

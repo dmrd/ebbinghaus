@@ -9,6 +9,7 @@
 
 (enable-console-print!)
 
+
 (def schema {:name         {:db/cardinality :db.cardinality/one}
              :relation     {:db/cardinality :db.cardinality/one}
              :source       {:db/valueType :db.type/ref}
@@ -16,10 +17,19 @@
              })
 
 ;; Create a DataScript "connection" (an atom with the current DB value)
-(def conn (d/create-conn schema))
+(def global_conn (d/create-conn schema))
+
+(defonce ratom (r/atom
+                {
+                 :ts 0
+                 :conn global_conn
+                 }))
 
 ;; Define datoms to init db with
 (def datoms [
+             ;; {:db/id -1 :name "A"}
+             ;; {:db/id -2 :name "B"}
+             ;; {:db/id -3 :relation "LINK" :source -1 :target -2}
              {:db/id -1 :name "Datalog" :definition ["A declarative query language"] :properties ["Queries are guaranteed to terminate"]}
              {:db/id -2 :name "pull" :definition ["Retrieve data specified in pull pattern"] :syntax "(pull [conn] [pull pattern] [entity id])"}
              {:db/id -3 :name "q" :definition ["Queries database according to datalog query"] :syntax "(q [query] & args)"}
@@ -30,26 +40,29 @@
              ])
 
 ;;; Add the datoms via transaction
-(d/transact! conn datoms)
+(d/transact! global_conn datoms)
 
 ;; Register the connection with posh
-(p/posh! conn)
+(p/posh! global_conn)
 
 ; datalog is declarative, logic programming language
 ; datalog queries are guaranteed to terminate
 
-(defn new-entry-submit [conn]
+(defn new-entry-submit [ratom]
   (let [text (r/atom "")]
     (fn []
       [:div
        [:div [:span "Enter new item:"]]
+       [:div [:span (:ts @ratom)]]
        [:div [rc/input-text
               :model @text
               :on-change #(reset! text %)]
         [:input {:type "button"
                  :value "Submit"
                  :on-click #(do
-                              (p/transact! conn [{:db/id -1 :name @text}])
+                              (p/transact! (:conn @ratom) [{:db/id -1 :name @text}])
+                              (swap! ratom (fn [s] (assoc s :ts (inc (:ts s)))))
+                              ;; (swap! ratom ()inc)
                               (reset! text ""))
                  }]]])))
 
@@ -65,27 +78,28 @@
      ]
     ))
 
-(defn show-entries [conn]
-  (let [ids @(p/q '[:find ?e :where [?e :name]] conn)]
+(defn show-entries [ratom]
+  (let [conn (:conn @ratom)
+        ids @(p/q '[:find ?e :where [?e :name]] conn)]
     [rc/v-box
      :children (for [id (map first ids)] (show-entity conn id))]))
 
-(defn show-graph [conn]
+(defn show-graph [ratom]
   [:div
    [:span "graph"]
-   [g/render-graph conn]
+   [g/render-graph ratom]
    ]
   )
 
 
-(defn graph-editor [conn]
+(defn graph-editor [ratom]
   [:div
-   [new-entry-submit conn]
+   [new-entry-submit ratom]
    [:hr]
-   [show-entries conn]
+   [show-entries ratom]
    [:hr]
-   [show-graph conn]
+   [show-graph ratom]
    ])
 
 (defn render []
-  (r/render [graph-editor conn] (js/document.getElementById "app")))
+  (r/render [graph-editor ratom] (js/document.getElementById "app")))
