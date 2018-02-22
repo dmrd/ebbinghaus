@@ -39,8 +39,8 @@
 (defn node_to_position [node]
   (let [pos (.-position (.-_private node))]
     {
-     :x (* 100 pos.x)
-     :y (* 100 pos.y)
+     :x (* 50 pos.x)
+     :y (* 50 pos.y)
      }
     ))
 
@@ -109,8 +109,8 @@
                        :width 10 :height 10 }})))
   g)
 
-(defn build_graph [ratom]
-  (let [conn (:conn @ratom)
+(defn build_graph [conn]
+  (let [_ (.log js/console conn)
         node_ids @(p/q '[:find ?e :where [?e :name]] conn)
         nodes (for [id (map first node_ids)]
                 @(p/pull conn '[:name] id))
@@ -143,8 +143,8 @@
         ]
     g))
 
-(defn render-graph [ratom]
-  (let [g (build_graph ratom)
+(defn render-graph [conn]
+  (let [g (build_graph conn)
         nodes_js (.nodes g "")
         edges_js (.edges g "")
         ]
@@ -154,11 +154,15 @@
         (let [node (aget nodes_js node_id)
               pos (node_to_position node)
               ]
-          [:g {:key node_id}
+          [:g {:key
+               (aget node "_private" "data" "id")
+                                        ; node_id
+               }
            [node_svg pos]
            [node_text node pos]
            ]
           ))
+
       (for [edge_id (range edges_js.length)]
         (let [edge (aget edges_js edge_id)
               source (edge_to_source edge)
@@ -167,7 +171,7 @@
               target (edge_to_target edge)
               target_pos (node_to_position target)
               ]
-          [:g {:key edge_id}
+          [:g {:key (aget edge "_private" "data" "id")}
            [edge_line source_pos target_pos]
            [edge_text edge source_pos target_pos]
            ]

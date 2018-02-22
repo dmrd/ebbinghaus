@@ -17,11 +17,10 @@
                  [org.danielsz/system "0.4.0"]
                  [org.clojure/tools.namespace "0.2.11"]
                  [reagent "0.6.0"]
-                 [reagent "0.6.0"]
                  [posh "0.5.5"]
-                 [cljsjs/d3 "4.3.0-5"]
                  [re-com "2.1.0"]
                  [rid3 "0.2.0"]
+                 [datascript-transit "0.2.0"]
                  ]
 
   :plugins [[lein-cljsbuild "1.1.6"]

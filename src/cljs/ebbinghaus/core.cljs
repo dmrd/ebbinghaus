@@ -3,6 +3,7 @@
             [re-com.core :as rc]
             [posh.reagent :as p]
             [datascript.core :as d]
+            [datascript.transit :as dt]
             [cljsjs.d3 :as d3]
             [ebbinghaus.graph :as g]
             ))
@@ -17,13 +18,8 @@
              })
 
 ;; Create a DataScript "connection" (an atom with the current DB value)
-(def global_conn (d/create-conn schema))
-
-(defonce ratom (r/atom
-                {
-                 :ts 0
-                 :conn global_conn
-                 }))
+(defonce global_conn (d/create-conn schema))
+(p/posh! global_conn)
 
 ;; Define datoms to init db with
 (def datoms [
@@ -39,78 +35,91 @@
              {:db/id -7 :relation "function of" :source -3 :target -1}
              ])
 
-;;; Add the datoms via transaction
-(d/transact! global_conn datoms)
+(defn db->string [db]
+  (dt/write-transit-str db))
 
-;; Register the connection with posh
-(p/posh! global_conn)
+(defn string->db [s]
+  (dt/read-transit-str s))
 
-; datalog is declarative, logic programming language
-; datalog queries are guaranteed to terminate
+;; persisting DB between page reloads
+(defn persist_db [conn]
+  (js/localStorage.setItem "ebbinghaus/DB" (db->string @conn)))
 
-(defn new-entry-submit [ratom]
+(defn load_db []
+  (let [loaded (js/localStorage.getItem "ebbinghaus/DB")]
+    (if (nil? loaded)
+      (do
+        (.log js/console loaded)
+        (println "Creating default database")
+        (p/transact! global_conn datoms)
+        )
+      (do
+        (.log js/console "Loaded state from localstorage")
+        (let [db (string->db loaded)]
+          (reset! global_conn db)
+          )))))
+
+(defn transact! [conn query]
+  (p/transact! conn query)
+  (persist_db conn))
+
+(defn new-entry-submit [conn]
   (let [
-        conn (:conn @ratom)
         entity_ids @(p/q '[:find ?e :where [?e :name]] conn)
         entities (for [id entity_ids]
                    @(p/pull conn '[:name] (first id)))
         relation_ids @(p/q '[:find ?e :where [?e :relation]] conn)
         relations (for [id relation_ids]
-                   @(p/pull conn '[:relation] (first id)))
+                    @(p/pull conn '[:relation] (first id)))
         new-entity (r/atom "New entity")
         entity (r/atom nil)
         relation (r/atom "relation")
         object (r/atom nil)
         ]
-     (println relations)
-      [:div
-       [rc/h-box
-        :children [
-                   [:span "Enter new item:"]
-                   [rc/input-text
-                    :model new-entity
-                    :change-on-blur? false
-                    :on-change #(reset! new-entity %)]
-                   [:input {:type "button"
-                            :value "Submit"
-                            :on-click #(do
-                                         (p/transact! (:conn @ratom) [{:db/id -1 :name @new-entity}])
-                                         (reset! new-entity ""))}]
-                   ]]
-                    [rc/h-box
-                     :children [
-                                [:span "Enter new relation:"]
-                    [rc/single-dropdown
-                     :choices entities ;[{:name "test" :id 1}]
-                     :id-fn #(:db/id %)
-                     :label-fn #(:name %)
-                     :model entity
-                     :on-change #(do
-                                   (reset! entity %)
-                                   (println %)
-                                   (println @entity)
-                                   )
-                     ]
-                                [rc/input-text
-                                 :model relation
-                                 :change-on-blur? false
-                                 :width "100px"
-                                 :on-change #(reset! relation %)]
-                                [rc/single-dropdown
-                                 :choices entities
-                                 :id-fn #(:db/id %)
-                                 :label-fn #(:name %)
-                                 :model object
-                                 :on-change #(reset! object %)
-                                 ]
-                                [:input {:type "button"
-                                         :value "Submit relation"
-                                         :on-click #(p/transact! (:conn @ratom) [{:db/id -1
-                                                                                    :relation @relation
-                                                                                    :source @entity
-                                                                                    :target @object}])
-                                         }]
-                                ]]]))
+    [:div
+     [rc/h-box
+      :children [
+                 [:span "Enter new item:"]
+                 [rc/input-text
+                  :model new-entity
+                  :change-on-blur? false
+                  :on-change #(reset! new-entity %)]
+                 [:input {:type "button"
+                          :value "Submit"
+                          :on-click #(do
+                                       (transact! conn [{:db/id -1 :name @new-entity}])
+                                       (reset! new-entity ""))}]
+                 ]]
+     [rc/h-box
+      :children [
+                 [:span "Enter new relation:"]
+                 [rc/single-dropdown
+                  :choices entities ;[{:name "test" :id 1}]
+                  :id-fn #(:db/id %)
+                  :label-fn #(:name %)
+                  :model entity
+                  :on-change #(reset! entity %)
+                  ]
+                 [rc/input-text
+                  :model relation
+                  :change-on-blur? false
+                  :width "100px"
+                  :on-change #(reset! relation %)]
+                 [rc/single-dropdown
+                  :choices entities
+                  :id-fn #(:db/id %)
+                  :label-fn #(:name %)
+                  :model object
+                  :on-change #(reset! object %)
+                  ]
+                 [:input {:type "button"
+                          :value "Submit relation"
+                          :on-click #(transact! conn [{:db/id -1
+                                                       :relation @relation
+                                                       :source @entity
+                                                       :target @object}])
+                          }]
+                 ]]]))
 
 
 (defn show-entity [conn id]
@@ -120,29 +129,28 @@
      ]
     ))
 
-(defn show-entries [ratom]
-  (let [conn (:conn @ratom)
-        ids @(p/q '[:find ?e :where [?e :name]] conn)
-        ]
+(defn show-entries [conn]
+  (let [ids @(p/q '[:find ?e :where [?e :name]] conn)]
     [rc/v-box
      :children (for [id (map first ids)] (show-entity conn id))]))
 
-(defn show-graph [ratom]
+(defn show-graph [conn]
   [:div
    [:span "graph"]
-   [g/render-graph ratom]
+   [g/render-graph conn]
    ]
   )
 
 
-(defn graph-editor [ratom]
+(defn graph-editor [conn]
   [:div
-   [new-entry-submit ratom]
+   [new-entry-submit conn]
    [:hr]
-   [show-entries ratom]
+   [show-entries conn]
    [:hr]
-   [show-graph ratom]
+   [show-graph conn]
    ])
 
 (defn render []
-  (r/render [graph-editor ratom] (js/document.getElementById "app")))
+  (load_db)
+  (r/render [graph-editor global_conn] (js/document.getElementById "app")))
