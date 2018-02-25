@@ -15,6 +15,9 @@
              :relation     {:db/cardinality :db.cardinality/one}
              :source       {:db/valueType :db.type/ref}
              :target       {:db/valueType :db.type/ref}
+             :parent       {:db/valueType :db.type/ref}
+             :text         {:db/cardinalityType :db.cardinality/one}
+             :tag         {:db/cardinalityType :db.cardinality/one}
              })
 
 ;; Create a DataScript "connection" (an atom with the current DB value)
@@ -33,6 +36,14 @@
              {:db/id -5 :relation "wrapper for" :source -4 :target -1}
              {:db/id -6 :relation "function of" :source -2 :target -1}
              {:db/id -7 :relation "function of" :source -3 :target -1}
+             {:db/id -8 :tag "root"}
+             {:db/id -9 :text "Todos" :parent -8}
+             {:db/id -10 :text "Local storage" :parent -9}
+             {:db/id -11 :text "Hierarchical display" :parent -9}
+             {:db/id -12 :text "Data syncing" :parent -9}
+             {:db/id -13 :text "Options" :parent -12}
+             {:db/id -14 :text "Firebase" :parent -13}
+             {:db/id -15 :text "Datomic" :parent -13}
              ])
 
 (defn db->string [db]
@@ -52,6 +63,7 @@
         (.log js/console loaded)
         (println "Creating default database")
         (p/transact! global_conn datoms)
+        (persist_db global_conn)
         )
       (do
         (.log js/console "Loaded state from localstorage")
@@ -134,6 +146,56 @@
     [rc/v-box
      :children (for [id (map first ids)] (show-entity conn id))]))
 
+(defn node-edit-ui [conn info]
+  (let [text (r/atom (:text info))]
+  (fn []
+    [:li {:class "div"}
+     ;; [:div {:content-editable true
+     ;;        :suppressContentEditableWarning true
+     ;;        :onChange #(println %)
+     ;;        :onBlur #(.log js/console %)
+     ;;        }
+     [:input {:type "text"
+              :value @text
+              :style {:border "none"}
+              :on-change #(reset! text (-> % .-target .-value))
+              :on-blur #(transact! conn [{:db/id (:db/id info)
+                                         :text @text
+                                         }])
+              }
+      ]]
+    ))
+  )
+
+(defn show-tree
+  ([conn]
+   (let [root_ids @(p/q '[:find ?e :where [?e :tag]] conn)]
+     (if (empty? root_ids)
+       [:div "No root"]
+        (show-tree conn (first (first root_ids)))
+     )
+     ))
+  ([conn id]
+   (let [
+         ;; children_ids 0
+         children_ids @(p/q '[:find ?e
+                              :in $ ?parent
+                              :where [?e :parent ?parent]] conn id)
+         children_info (for [child_vec children_ids]
+                                @(p/pull conn '[*] (first child_vec)
+                           ))
+         ]
+     [:div
+      (doall (for [info children_info]
+               [:ul {:key (:db/id info)}
+                [node-edit-ui conn info]
+                (show-tree conn (:db/id info))
+                ]
+               ))
+      ]
+       ))
+  )
+
 (defn show-graph [conn]
   [:div
    [:span "graph"]
@@ -148,7 +210,9 @@
    [:hr]
    [show-entries conn]
    [:hr]
-   [show-graph conn]
+   [show-tree conn]
+   [:hr]
+   ; [show-graph conn]
    ])
 
 (defn render []
